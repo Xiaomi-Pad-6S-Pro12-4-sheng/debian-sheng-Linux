@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       distro_suite:
-        description: 'Debian 版本'
+        description: 'Debian 版本（代号）'
         type: choice
         options:
           - trixie
@@ -16,12 +16,12 @@ on:
         default: 'trixie'
 
       desktop:
-        description: '桌面环境（server = 无桌面）'
+        description: '桌面环境（服务器 = 无桌面）'
         type: choice
         options:
           - GNOME
           - KDE Plasma
-          - server
+          - 服务器（无桌面）
         default: 'KDE Plasma'
 
       plasma_mobile:
@@ -63,15 +63,15 @@ on:
       boot_mode:
         description: |
           启动模式：
-          - single: 从 "userdata" 分区启动
-          - dual: 从 "linux" 分区启动
-          - custom: 从自定义分区启动（无预编译内核可用）
+          - 单系统：从 "userdata" 分区启动
+          - 双系统：从 "linux" 分区启动
+          - 自定义：从自定义分区启动（无预编译内核可用）
         type: choice
         options:
-          - 'single (userdata)'
-          - 'dual (linux)'
-          - 'custom'
-        default: 'dual (linux)'
+          - 单系统（userdata）
+          - 双系统（linux）
+          - 自定义
+        default: '双系统（linux）'
 
       quiet_boot:
         description: '启用安静启动（带 Plymouth 启动画面）'
@@ -79,7 +79,7 @@ on:
         default: true
 
       custom_partition:
-        description: '自定义分区（boot_mode=custom 时必填）'
+        description: '自定义分区（boot_mode=自定义 时必填）'
         type: string
         required: false
         default: ''
@@ -87,28 +87,28 @@ on:
       kernel_source:
         description: |
           内核来源：
-          - prebuilt: ianchb/sm8550-mainline
-          - custom_build: 自定义仓库
+          - 预编译：ianchb/sm8550-mainline
+          - 自定义编译：自定义仓库
         type: choice
         options:
-          - 'prebuilt'
-          - 'custom_build'
-        default: 'prebuilt'
+          - 预编译
+          - 自定义编译
+        default: '预编译'
 
       kernel_repo:
-        description: '内核仓库 URL（kernel_source=custom_build 时必填）'
+        description: '内核仓库 URL（kernel_source=自定义编译 时必填）'
         type: string
         required: false
         default: 'https://github.com/ianchb/sm8550-mainline'
 
       kernel_branch:
-        description: '内核分支（kernel_source=custom_build 时必填）'
+        description: '内核分支（kernel_source=自定义编译 时必填）'
         type: string
         required: false
         default: 'sheng-7.2.6'
 
       kernel_config:
-        description: '内核配置（kernel_source=custom_build 时必填）'
+        description: '内核配置（kernel_source=自定义编译 时必填）'
         type: string
         required: false
         default: 'sm8550.config'
@@ -131,7 +131,7 @@ on:
 
 jobs:
   # ==========================================================================
-  # 内核（仅 custom_build 时执行）
+  # 内核（仅自定义编译时执行）
   # ==========================================================================
   build-kernel:
     name: "构建内核"
@@ -139,15 +139,15 @@ jobs:
 
     steps:
       - name: "跳过（使用预编译内核）"
-        if: ${{ inputs.kernel_source != 'custom_build' }}
+        if: ${{ inputs.kernel_source != '自定义编译' }}
         run: echo "✓ 使用预编译内核，跳过构建"
 
       - name: "检出仓库"
-        if: ${{ inputs.kernel_source == 'custom_build' }}
+        if: ${{ inputs.kernel_source == '自定义编译' }}
         uses: actions/checkout@v7
 
       - name: "安装构建工具"
-        if: ${{ inputs.kernel_source == 'custom_build' }}
+        if: ${{ inputs.kernel_source == '自定义编译' }}
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -160,7 +160,7 @@ jobs:
           echo "✓ 构建工具已安装"
 
       - name: "恢复 ccache 缓存"
-        if: ${{ inputs.kernel_source == 'custom_build' }}
+        if: ${{ inputs.kernel_source == '自定义编译' }}
         uses: actions/cache@v6
         with:
           path: /home/runner/.ccache
@@ -171,7 +171,7 @@ jobs:
             ccache-kernel-
 
       - name: "克隆内核仓库"
-        if: ${{ inputs.kernel_source == 'custom_build' }}
+        if: ${{ inputs.kernel_source == '自定义编译' }}
         run: |
           git clone "${{ inputs.kernel_repo }}" \
             --branch "${{ inputs.kernel_branch }}" \
@@ -181,7 +181,7 @@ jobs:
 
       - name: "构建内核"
         id: build
-        if: ${{ inputs.kernel_source == 'custom_build' }}
+        if: ${{ inputs.kernel_source == '自定义编译' }}
         run: |
           export CCACHE_DIR=/home/runner/.ccache
           export PATH="/usr/lib/ccache:$PATH"
@@ -227,7 +227,7 @@ jobs:
           echo "✓ 内核构建完成"
 
       - name: "打包内核"
-        if: ${{ inputs.kernel_source == 'custom_build' }}
+        if: ${{ inputs.kernel_source == '自定义编译' }}
         run: |
           KVER="${{ steps.build.outputs.kernel_version }}"
           mkdir -p linux-xiaomi-sheng/DEBIAN
@@ -243,7 +243,7 @@ jobs:
           echo "✓ linux-xiaomi-sheng.deb 已打包"
 
       - name: "上传内核包"
-        if: ${{ inputs.kernel_source == 'custom_build' }}
+        if: ${{ inputs.kernel_source == '自定义编译' }}
         uses: actions/upload-artifact@v7
         with:
           name: kernel-custom-deb
@@ -252,7 +252,7 @@ jobs:
           if-no-files-found: error
 
       - name: "上传内核镜像"
-        if: ${{ inputs.kernel_source == 'custom_build' }}
+        if: ${{ inputs.kernel_source == '自定义编译' }}
         uses: actions/upload-artifact@v7
         with:
           name: kernel-custom-image
@@ -660,13 +660,13 @@ jobs:
           if [[ -z "$ROOTFS_PASSWORD" ]]; then
             echo "::warning::未设置 ROOTFS_PASSWORD；镜像将使用默认密码 'password'。"
           fi
-          if [[ "${{ inputs.boot_mode }}" == "custom" ]]; then
-            if [[ "${{ inputs.kernel_source }}" != "custom_build" ]]; then
-              echo "错误：自定义分区需要 custom_build 内核"
+          if [[ "${{ inputs.boot_mode }}" == "自定义" ]]; then
+            if [[ "${{ inputs.kernel_source }}" != "自定义编译" ]]; then
+              echo "错误：自定义分区需要自定义编译内核"
               exit 1
             fi
             if [[ -z "${{ inputs.custom_partition }}" ]]; then
-              echo "错误：boot_mode=custom 时必须指定 custom_partition"
+              echo "错误：boot_mode=自定义 时必须指定 custom_partition"
               exit 1
             fi
           fi
@@ -675,7 +675,7 @@ jobs:
       - name: "解析分区标签"
         id: partition
         run: |
-          if [[ "${{ inputs.quiet_boot }}" == "true" && "${{ inputs.desktop }}" != "server" ]]; then
+          if [[ "${{ inputs.quiet_boot }}" == "true" && "${{ inputs.desktop }}" != "服务器（无桌面）" ]]; then
             QUIET_BOOT=true
           else
             QUIET_BOOT=false
@@ -683,7 +683,7 @@ jobs:
           echo "quiet_boot_enabled=$QUIET_BOOT" >> $GITHUB_OUTPUT
 
           case "${{ inputs.boot_mode }}" in
-            'single (userdata)')
+            '单系统（userdata）')
               echo "label=userdata" >> $GITHUB_OUTPUT
               if [[ "$QUIET_BOOT" == "true" ]]; then
                 echo "boot_img_pattern=boot_sheng_singleboot_plymouth.img" >> $GITHUB_OUTPUT
@@ -691,7 +691,7 @@ jobs:
                 echo "boot_img_pattern=boot_sheng_singleboot.img" >> $GITHUB_OUTPUT
               fi
               ;;
-            'dual (linux)')
+            '双系统（linux）')
               echo "label=linux" >> $GITHUB_OUTPUT
               if [[ "$QUIET_BOOT" == "true" ]]; then
                 echo "boot_img_pattern=boot_sheng_dualboot_plymouth.img" >> $GITHUB_OUTPUT
@@ -699,7 +699,7 @@ jobs:
                 echo "boot_img_pattern=boot_sheng_dualboot.img" >> $GITHUB_OUTPUT
               fi
               ;;
-            'custom')
+            '自定义')
               echo "label=${{ inputs.custom_partition }}" >> $GITHUB_OUTPUT
               ;;
           esac
@@ -720,7 +720,7 @@ jobs:
       # ----------------------------------------------------------------
 
       - name: "[预编译] 下载内核"
-        if: ${{ inputs.kernel_source != 'custom_build' }}
+        if: ${{ inputs.kernel_source != '自定义编译' }}
         run: |
           LATEST_TAG=$(gh release list --repo ianchb/sm8550-mainline --limit 1 --json tagName -q '.[0].tagName')
           echo "  最新标签：$LATEST_TAG"
@@ -741,13 +741,13 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: "[自定义] 下载内核包"
-        if: ${{ inputs.kernel_source == 'custom_build' }}
+        if: ${{ inputs.kernel_source == '自定义编译' }}
         uses: actions/download-artifact@v8
         with:
           name: kernel-custom-deb
 
       - name: "[自定义] 下载内核镜像"
-        if: ${{ inputs.kernel_source == 'custom_build' }}
+        if: ${{ inputs.kernel_source == '自定义编译' }}
         uses: actions/download-artifact@v8
         with:
           name: kernel-custom-image
@@ -1253,7 +1253,7 @@ jobs:
       # ----------------------------------------------------------------
 
       - name: "[自定义] 生成 boot.img"
-        if: ${{ inputs.kernel_source == 'custom_build' }}
+        if: ${{ inputs.kernel_source == '自定义编译' }}
         run: |
           PARTITION="${{ steps.partition.outputs.label }}"
           CMDLINE="root=PARTLABEL=$PARTITION"
