@@ -1,11 +1,9 @@
 # ============================================================================
 # 🐧 为 Xiaomi Pad 6s Pro (Sheng) 构建 RootFS
 # ============================================================================
-# 说明：
-#   - workflow_dispatch 菜单描述已详细汉化，选项值保持原样以免破坏逻辑。
-#   - 构建完成后使用 7-Zip 深度压缩，并按最大分卷自动计算最少分卷数。
-#   - 分卷大小默认上限 1900m，避免超过 GitHub Release 单文件 2GB 限制。
-#   - 可设置 create_release=false 仅构建，不发布 Release。
+# 注意：GitHub workflow_dispatch 最多只能定义 10 个 inputs。
+#       本文件 UI 菜单保留 10 个最常改的选项，其余高级参数放在下面 env: 里。
+#       要改内核仓库、固件仓库、Release 标签等，直接改 env: 部分即可。
 # ============================================================================
 
 name: 构建 RootFS (测试)
@@ -71,7 +69,7 @@ on:
           启动模式：
           - single: 从 userdata 分区启动
           - dual: 从 linux 分区启动
-          - custom: 从自定义分区启动（无预编译内核）
+          - custom: 从自定义分区启动（需改 YAML 里的 CUSTOM_PARTITION）
         type: choice
         options:
           - 'single (userdata)'
@@ -79,106 +77,48 @@ on:
           - 'custom'
         default: 'dual (linux)'
 
-      quiet_boot:
-        description: '启用静默启动（Plymouth 启动画面）'
-        type: boolean
-        default: true
-
-      custom_partition:
-        description: '自定义分区（boot_mode=custom 时必填）'
-        type: string
-        required: false
-        default: ''
-
       kernel_source:
         description: |
           内核来源：
           - prebuilt: ianchb/sm8550-mainline 预编译内核
-          - custom_build: 自定义仓库编译
+          - custom_build: 自定义仓库编译（需改 YAML 里的 KERNEL_REPO 等）
         type: choice
         options:
           - 'prebuilt'
           - 'custom_build'
         default: 'prebuilt'
 
-      kernel_repo:
-        description: '内核仓库 URL（kernel_source=custom_build 时必填）'
-        type: string
-        required: false
-        default: 'https://github.com/ianchb/sm8550-mainline'
-
-      kernel_branch:
-        description: '内核分支（kernel_source=custom_build 时必填）'
-        type: string
-        required: false
-        default: 'sheng-7.2.6'
-
-      kernel_config:
-        description: '内核配置文件名（kernel_source=custom_build 时必填）'
-        type: string
-        required: false
-        default: 'sm8550.config'
-
-      firmware_repo:
-        description: '固件仓库 URL'
-        type: string
-        required: false
-        default: 'https://github.com/ianchb/sheng-firmware'
-
-      firmware_branch:
-        description: '固件分支'
-        type: string
-        required: false
-        default: 'master'
-
       create_release:
-        description: '构建完成后创建 GitHub Release'
+        description: '构建完成后创建 GitHub Release（并 7z 深度压缩 + 自适应分卷）'
         type: boolean
         default: true
 
-      release_tag:
-        description: 'Release 标签（留空自动生成）'
-        type: string
-        default: ''
+# ============================================================================
+# 高级配置：不通过 UI 菜单，直接修改此处
+# ============================================================================
+env:
+  # boot_mode=custom 时使用的自定义分区标签
+  CUSTOM_PARTITION: ''
 
-      release_name:
-        description: 'Release 标题（留空自动生成）'
-        type: string
-        default: ''
+  # 内核编译相关（kernel_source=custom_build 时生效）
+  KERNEL_REPO: 'https://github.com/ianchb/sm8550-mainline'
+  KERNEL_BRANCH: 'sheng-7.2.6'
+  KERNEL_CONFIG: 'sm8550.config'
 
-      release_draft:
-        description: '创建为草稿 Release'
-        type: boolean
-        default: false
+  # 固件仓库
+  FIRMWARE_REPO: 'https://github.com/ianchb/sheng-firmware'
+  FIRMWARE_BRANCH: 'master'
 
-      release_prerelease:
-        description: '创建为预发布 Release'
-        type: boolean
-        default: false
-
-      release_split_size:
-        description: '最大分卷大小（自动计算实际分卷大小，默认 1900m，需小于 GitHub 2GB 单文件限制）'
-        type: string
-        default: '1900m'
-
-      release_compression_level:
-        description: '7z 压缩等级（0-9，9 最深）'
-        type: choice
-        options:
-          - '0'
-          - '1'
-          - '2'
-          - '3'
-          - '4'
-          - '5'
-          - '6'
-          - '7'
-          - '8'
-          - '9'
-        default: '9'
+  # Release 高级配置
+  RELEASE_TAG: ''                   # 留空自动生成
+  RELEASE_NAME: ''                  # 留空自动生成
+  RELEASE_DRAFT: 'false'            # 'true' / 'false'
+  RELEASE_PRERELEASE: 'false'       # 'true' / 'false'
+  RELEASE_SPLIT_SIZE: '1900m'       # 最大分卷大小（实际上限，自动计算最少分卷数）
+  RELEASE_COMPRESSION_LEVEL: '9'    # 7z 压缩等级 0-9
 
 # ============================================================================
-# 构建任务：每个任务产出一个 .deb，并作为 artifact 上传
+# 构建任务
 # ============================================================================
 
 jobs:
@@ -196,7 +136,7 @@ jobs:
 
       - name: "检出仓库"
         if: ${{ inputs.kernel_source == 'custom_build' }}
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
 
       - name: "安装编译工具"
         if: ${{ inputs.kernel_source == 'custom_build' }}
@@ -213,20 +153,20 @@ jobs:
 
       - name: "恢复 ccache"
         if: ${{ inputs.kernel_source == 'custom_build' }}
-        uses: actions/cache@v6
+        uses: actions/cache@v4
         with:
           path: /home/runner/.ccache
-          key: ccache-kernel-${{ inputs.kernel_branch }}-${{ inputs.kernel_config }}-${{ hashFiles(inputs.kernel_config) }}
+          key: ccache-kernel-${{ env.KERNEL_BRANCH }}-${{ env.KERNEL_CONFIG }}-${{ hashFiles(env.KERNEL_CONFIG) }}
           restore-keys: |
-            ccache-kernel-${{ inputs.kernel_branch }}-${{ inputs.kernel_config }}-
-            ccache-kernel-${{ inputs.kernel_branch }}-
+            ccache-kernel-${{ env.KERNEL_BRANCH }}-${{ env.KERNEL_CONFIG }}-
+            ccache-kernel-${{ env.KERNEL_BRANCH }}-
             ccache-kernel-
 
       - name: "克隆内核仓库"
         if: ${{ inputs.kernel_source == 'custom_build' }}
         run: |
-          git clone "${{ inputs.kernel_repo }}" \
-            --branch "${{ inputs.kernel_branch }}" \
+          git clone "$KERNEL_REPO" \
+            --branch "$KERNEL_BRANCH" \
             --depth 1 \
             linux
           echo "✓ 内核仓库克隆完成"
@@ -246,7 +186,7 @@ jobs:
           export READELF="llvm-readelf"
           export STRIP="llvm-strip"
 
-          cp "${{ github.workspace }}/${{ inputs.kernel_config }}" linux/.config
+          cp "${{ github.workspace }}/$KERNEL_CONFIG" linux/.config
           cd linux
 
           make -j$(nproc) ARCH=arm64 LLVM=1
@@ -296,7 +236,7 @@ jobs:
 
       - name: "上传内核 deb 包"
         if: ${{ inputs.kernel_source == 'custom_build' }}
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: kernel-custom-deb
           path: linux-xiaomi-sheng.deb
@@ -305,7 +245,7 @@ jobs:
 
       - name: "上传内核镜像"
         if: ${{ inputs.kernel_source == 'custom_build' }}
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: kernel-custom-image
           path: Image.gz-dtb_sheng
@@ -313,7 +253,7 @@ jobs:
           if-no-files-found: error
 
   # ==========================================================================
-  # fastrpc — Qualcomm FastRPC 用户态 + adsprpcd-sensorspd.service
+  # fastrpc
   # ==========================================================================
   build-fastrpc:
     name: "构建 fastrpc"
@@ -321,7 +261,7 @@ jobs:
 
     steps:
       - name: "检出仓库"
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
 
       - name: "安装编译工具"
         run: |
@@ -378,7 +318,7 @@ jobs:
           echo "✓ fastrpc 打包完成"
 
       - name: "上传 fastrpc"
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: fastrpc-deb
           path: fastrpc_*.deb
@@ -386,7 +326,7 @@ jobs:
           if-no-files-found: error
 
   # ==========================================================================
-  # libssc — Qualcomm Sensor Core 用户态库
+  # libssc
   # ==========================================================================
   build-libssc:
     name: "构建 libssc"
@@ -394,7 +334,7 @@ jobs:
 
     steps:
       - name: "检出仓库"
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
 
       - name: "安装编译工具"
         run: |
@@ -451,7 +391,7 @@ jobs:
           echo "✓ libssc 打包完成"
 
       - name: "上传 libssc"
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: libssc-deb
           path: libssc_*.deb
@@ -459,7 +399,7 @@ jobs:
           if-no-files-found: error
 
   # ==========================================================================
-  # iio-sensor-proxy — 带 Qualcomm SSC 支持的补丁版（依赖 libssc）
+  # iio-sensor-proxy
   # ==========================================================================
   build-iio-sensor-proxy:
     name: "构建 iio-sensor-proxy"
@@ -480,7 +420,7 @@ jobs:
           echo "✓ 编译工具安装完成"
 
       - name: "下载 libssc"
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v4
         with:
           name: libssc-deb
 
@@ -534,7 +474,7 @@ jobs:
           echo "✓ iio-sensor-proxy 打包完成"
 
       - name: "上传 iio-sensor-proxy"
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: iio-sensor-proxy-deb
           path: iio-sensor-proxy_*.deb
@@ -542,7 +482,7 @@ jobs:
           if-no-files-found: error
 
   # ==========================================================================
-  # sheng-sensors — 专有传感器配置文件
+  # sheng-sensors
   # ==========================================================================
   build-sheng-sensors:
     name: "构建 sheng-sensors"
@@ -550,7 +490,7 @@ jobs:
 
     steps:
       - name: "检出仓库"
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
 
       - name: "安装编译工具"
         run: |
@@ -601,7 +541,7 @@ jobs:
           echo "✓ sheng-sensors 打包完成"
 
       - name: "上传 sheng-sensors"
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: sheng-sensors-deb
           path: sheng-sensors_*.deb
@@ -609,7 +549,7 @@ jobs:
           if-no-files-found: error
 
   # ==========================================================================
-  # sheng-devauth — 键盘认证守护进程
+  # sheng-devauth
   # ==========================================================================
   build-sheng-devauth:
     name: "构建 sheng-devauth"
@@ -617,7 +557,7 @@ jobs:
 
     steps:
       - name: "检出仓库"
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
 
       - name: "安装编译工具"
         run: |
@@ -669,7 +609,7 @@ jobs:
           echo "✓ sheng-devauth 打包完成"
 
       - name: "上传 sheng-devauth"
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: sheng-devauth-deb
           path: sheng-devauth.deb
@@ -677,7 +617,7 @@ jobs:
           if-no-files-found: error
 
   # ==========================================================================
-  # RootFS 组装 — 收集所有 .deb，构建镜像
+  # RootFS 组装
   # ==========================================================================
   build-rootfs:
     name: "构建 RootFS"
@@ -698,12 +638,8 @@ jobs:
       IMAGE_SIZE: 10G
 
     steps:
-      # ----------------------------------------------------------------
-      # 检出与参数校验
-      # ----------------------------------------------------------------
-
       - name: "检出仓库"
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
 
       - name: "校验参数"
         env:
@@ -717,8 +653,8 @@ jobs:
               echo "错误：自定义分区需要 custom_build 内核"
               exit 1
             fi
-            if [[ -z "${{ inputs.custom_partition }}" ]]; then
-              echo "错误：boot_mode=custom 时 custom_partition 必填"
+            if [[ -z "$CUSTOM_PARTITION" ]]; then
+              echo "错误：boot_mode=custom 时请在 YAML env 里设置 CUSTOM_PARTITION"
               exit 1
             fi
           fi
@@ -752,24 +688,16 @@ jobs:
               fi
               ;;
             'custom')
-              echo "label=${{ inputs.custom_partition }}" >> $GITHUB_OUTPUT
+              echo "label=$CUSTOM_PARTITION" >> $GITHUB_OUTPUT
               ;;
           esac
           echo "✓ 分区标签设置完成"
-
-      # ----------------------------------------------------------------
-      # 安装工具
-      # ----------------------------------------------------------------
 
       - name: "安装构建工具"
         run: |
           sudo apt-get update
           sudo apt-get install -y debootstrap git curl
           echo "✓ 构建工具安装完成"
-
-      # ----------------------------------------------------------------
-      # 获取内核
-      # ----------------------------------------------------------------
 
       - name: "[预编译] 下载内核"
         if: ${{ inputs.kernel_source != 'custom_build' }}
@@ -794,48 +722,40 @@ jobs:
 
       - name: "[自定义] 下载内核包"
         if: ${{ inputs.kernel_source == 'custom_build' }}
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v4
         with:
           name: kernel-custom-deb
 
       - name: "[自定义] 下载内核镜像"
         if: ${{ inputs.kernel_source == 'custom_build' }}
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v4
         with:
           name: kernel-custom-image
 
-      # ----------------------------------------------------------------
-      # 下载构建任务 artifacts
-      # ----------------------------------------------------------------
-
       - name: "下载 fastrpc"
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v4
         with:
           name: fastrpc-deb
 
       - name: "下载 libssc"
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v4
         with:
           name: libssc-deb
 
       - name: "下载 iio-sensor-proxy"
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v4
         with:
           name: iio-sensor-proxy-deb
 
       - name: "下载 sheng-sensors"
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v4
         with:
           name: sheng-sensors-deb
 
       - name: "下载 sheng-devauth"
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v4
         with:
           name: sheng-devauth-deb
-
-      # ----------------------------------------------------------------
-      # 准备内联包
-      # ----------------------------------------------------------------
 
       - name: "打包 alsa-xiaomi-sheng"
         run: |
@@ -843,7 +763,7 @@ jobs:
           echo "✓ alsa-xiaomi-sheng.deb 打包完成"
 
       - name: "上传 alsa-xiaomi-sheng"
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: alsa-xiaomi-sheng-deb
           path: alsa-xiaomi-sheng.deb
@@ -853,8 +773,8 @@ jobs:
       - name: "打包 firmware-xiaomi-sheng"
         run: |
           git clone --depth 1 \
-            --branch "${{ inputs.firmware_branch }}" \
-            "${{ inputs.firmware_repo }}" \
+            --branch "$FIRMWARE_BRANCH" \
+            "$FIRMWARE_REPO" \
             firmware-src
           mkdir -p firmware-xiaomi-sheng/usr/lib/firmware
           cp -r firmware-src/* firmware-xiaomi-sheng/usr/lib/firmware/
@@ -863,7 +783,7 @@ jobs:
           echo "✓ firmware-xiaomi-sheng.deb 打包完成"
 
       - name: "上传 firmware-xiaomi-sheng"
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: firmware-xiaomi-sheng-deb
           path: firmware-xiaomi-sheng.deb
@@ -881,14 +801,6 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: "上传 xiaomi-mipps-auth"
-        uses: actions/upload-artifact@v7
-        with:
-          name: xiaomi-mipps-auth-deb
-          path: xiaomi-mipps-auth*.deb
-          retention-days: 3
-          if-no-files-found: error
-
       - name: "下载 xiaomi-charger-mode"
         run: |
           LATEST_TAG=$(gh release list --repo ianchb/xiaomi-charger-mode --limit 1 --json tagName -q '.[0].tagName')
@@ -899,14 +811,6 @@ jobs:
           echo "✓ xiaomi-charger-mode.deb 下载完成"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: "上传 xiaomi-charger-mode"
-        uses: actions/upload-artifact@v7
-        with:
-          name: xiaomi-charger-mode-deb
-          path: xiaomi-charger-mode*.deb
-          retention-days: 3
-          if-no-files-found: error
 
       - name: "下载 xiaomi-sheng-thp"
         run: |
@@ -919,14 +823,6 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: "上传 xiaomi-sheng-thp"
-        uses: actions/upload-artifact@v7
-        with:
-          name: xiaomi-sheng-thp-deb
-          path: xiaomi-sheng-thp*.deb
-          retention-days: 3
-          if-no-files-found: error
-
       - name: "下载 xiaomi-pen-status"
         run: |
           LATEST_TAG=$(gh release list --repo ianchb/xiaomi-pen-status --limit 1 --json tagName -q '.[0].tagName')
@@ -937,14 +833,6 @@ jobs:
           echo "✓ xiaomi-pen-status.deb 下载完成"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: "上传 xiaomi-pen-status"
-        uses: actions/upload-artifact@v7
-        with:
-          name: xiaomi-pen-status-deb
-          path: xiaomi-pen-status*.deb
-          retention-days: 3
-          if-no-files-found: error
 
       - name: "下载 xiaomi-sheng-fingerprint"
         run: |
@@ -957,14 +845,6 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: "上传 xiaomi-sheng-fingerprint"
-        uses: actions/upload-artifact@v7
-        with:
-          name: xiaomi-sheng-fingerprint-deb
-          path: xiaomi-sheng-fingerprint*.deb
-          retention-days: 3
-          if-no-files-found: error
-
       - name: "下载 xiaomi-sheng-keyboard-helper"
         run: |
           LATEST_TAG=$(gh release list --repo ianchb/xiaomi-sheng-keyboard-helper --limit 1 --json tagName -q '.[0].tagName')
@@ -975,18 +855,6 @@ jobs:
           echo "✓ xiaomi-sheng-keyboard-helper.deb 下载完成"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: "上传 xiaomi-sheng-keyboard-helper"
-        uses: actions/upload-artifact@v7
-        with:
-          name: xiaomi-sheng-keyboard-helper.deb
-          path: xiaomi-sheng-keyboard-helper*.deb
-          retention-days: 3
-          if-no-files-found: error
-
-      # ----------------------------------------------------------------
-      # 创建镜像
-      # ----------------------------------------------------------------
 
       - name: "创建 RootFS 镜像"
         run: |
@@ -999,10 +867,6 @@ jobs:
           sudo mkdir -p "$ROOTFS_MOUNT"
           sudo mount -o loop rootfs.img "$ROOTFS_MOUNT"
           echo "✓ RootFS 镜像已挂载到 $ROOTFS_MOUNT"
-
-      # ----------------------------------------------------------------
-      # Debootstrap
-      # ----------------------------------------------------------------
 
       - name: "运行 Debootstrap (${{ inputs.distro_suite }})"
         run: |
@@ -1022,10 +886,6 @@ jobs:
           sudo mount -t sysfs sys "$ROOTFS_MOUNT/sys"
           sudo cp /etc/resolv.conf "$ROOTFS_MOUNT/etc/resolv.conf"
           echo "✓ 虚拟文件系统挂载完成"
-
-      # ----------------------------------------------------------------
-      # 安装软件包
-      # ----------------------------------------------------------------
 
       - name: "安装基础软件包"
         run: |
@@ -1077,39 +937,16 @@ jobs:
           "
           echo "✓ 所有 .deb 包安装完成"
 
-      # ----------------------------------------------------------------
-      # 系统调整
-      # ----------------------------------------------------------------
-
       - name: "修复权限"
         run: |
-          if [ -f "$ROOTFS_MOUNT/usr/bin/adsprpcd" ]; then
-            sudo chmod +x "$ROOTFS_MOUNT/usr/bin/adsprpcd"
-            echo "✓ adsprpcd 权限已修复"
-          else
-            echo "  /usr/bin/adsprpcd 未找到，跳过"
-          fi
-
-          if [ -f "$ROOTFS_MOUNT/usr/libexec/iio-sensor-proxy" ]; then
-            sudo chmod +x "$ROOTFS_MOUNT/usr/libexec/iio-sensor-proxy"
-            echo "✓ iio-sensor-proxy 权限已修复"
-          else
-            echo "  /usr/libexec/iio-sensor-proxy 未找到，跳过"
-          fi
-
-          if [ -f "$ROOTFS_MOUNT/usr/bin/monitor-sensor" ]; then
-            sudo chmod +x "$ROOTFS_MOUNT/usr/bin/monitor-sensor"
-            echo "✓ monitor-sensor 权限已修复"
-          else
-            echo "  /usr/bin/monitor-sensor 未找到，跳过"
-          fi
-
-          if [ -f "$ROOTFS_MOUNT/usr/bin/ssccli" ]; then
-            sudo chmod +x "$ROOTFS_MOUNT/usr/bin/ssccli"
-            echo "✓ ssccli 权限已修复"
-          else
-            echo "  /usr/bin/ssccli 未找到，跳过"
-          fi
+          for f in /usr/bin/adsprpcd /usr/libexec/iio-sensor-proxy /usr/bin/monitor-sensor /usr/bin/ssccli; do
+            if [ -f "$ROOTFS_MOUNT$f" ]; then
+              sudo chmod +x "$ROOTFS_MOUNT$f"
+              echo "✓ $f 权限已修复"
+            else
+              echo "  $f 未找到，跳过"
+            fi
+          done
 
       - name: "启用传感器服务"
         run: |
@@ -1162,10 +999,6 @@ jobs:
           printf 'root:%s\n' "$ROOTFS_PASSWORD" | \
             sudo chroot "$ROOTFS_MOUNT" chpasswd
           echo "✓ 密码设置完成"
-
-      # ----------------------------------------------------------------
-      # 桌面环境
-      # ----------------------------------------------------------------
 
       - name: "安装 GNOME"
         if: ${{ inputs.desktop == 'GNOME' }}
@@ -1251,10 +1084,6 @@ jobs:
           sudo chroot "$ROOTFS_MOUNT" systemctl enable NetworkManager
           echo "✓ NetworkManager 已启用"
 
-      # ----------------------------------------------------------------
-      # 收尾与卸载
-      # ----------------------------------------------------------------
-
       - name: "配置 fstab"
         run: |
           PARTITION="${{ steps.partition.outputs.label }}"
@@ -1298,10 +1127,6 @@ jobs:
           tune2fs -U ee8d3593-59b1-480e-a3b6-4fefb17ee7d8 rootfs.img || true
           echo "✓ 镜像已卸载，UUID 已设置"
 
-      # ----------------------------------------------------------------
-      # 启动镜像（仅自定义内核）
-      # ----------------------------------------------------------------
-
       - name: "[自定义] 生成 boot.img"
         if: ${{ inputs.kernel_source == 'custom_build' }}
         run: |
@@ -1323,7 +1148,7 @@ jobs:
           echo "✓ boot.img 生成完成（cmdline: $CMDLINE）"
 
       # ----------------------------------------------------------------
-      # Release：7-Zip 深度压缩 + 自适应分卷上传
+      # Release：7-Zip 深度压缩 + 自适应分卷
       # ----------------------------------------------------------------
 
       - name: "安装 7-Zip"
@@ -1338,7 +1163,7 @@ jobs:
         if: ${{ inputs.create_release }}
         run: |
           set -e
-          TAG="${{ inputs.release_tag }}"
+          TAG="$RELEASE_TAG"
           if [[ -z "$TAG" ]]; then
             DISTRO="${{ inputs.distro_suite }}"
             DESKTOP="${{ inputs.desktop }}"
@@ -1347,7 +1172,7 @@ jobs:
             BOOT="${BOOT%% *}"
             TAG="sheng-rootfs-${DISTRO}-${DESKTOP}-${BOOT}-$(date +%Y%m%d)-${GITHUB_RUN_NUMBER}"
           fi
-          TITLE="${{ inputs.release_name }}"
+          TITLE="$RELEASE_NAME"
           if [[ -z "$TITLE" ]]; then
             TITLE="Xiaomi Pad 6s Pro RootFS ${TAG}"
           fi
@@ -1360,11 +1185,11 @@ jobs:
         if: ${{ inputs.create_release }}
         run: |
           set -e
-          LEVEL="${{ inputs.release_compression_level }}"
-          MAX_SPLIT_STR="${{ inputs.release_split_size }}"
+          LEVEL="$RELEASE_COMPRESSION_LEVEL"
+          MAX_SPLIT_STR="$RELEASE_SPLIT_SIZE"
           mkdir -p release-assets
 
-          # ---------- 解析最大分卷大小（支持 m/M/g/G，默认 1900m） ----------
+          # 解析最大分卷大小
           if [[ "$MAX_SPLIT_STR" =~ ^([0-9]+)([mMgG])$ ]]; then
             NUM="${BASH_REMATCH[1]}"
             UNIT="${BASH_REMATCH[2]}"
@@ -1377,7 +1202,7 @@ jobs:
           fi
           echo "  最大分卷大小上限：$((MAX_SPLIT_BYTES / 1024 / 1024)) MiB"
 
-          # ---------- 压缩 rootfs.img（先单个压缩，测实际大小） ----------
+          # 先单压缩测大小
           echo "  RootFS 镜像首次压缩中（等级 $LEVEL）..."
           7z a -t7z -m0=lzma2 -mx="$LEVEL" -mfb=273 -md=256m -ms=on \
             release-assets/rootfs.img.7z rootfs.img > /dev/null
@@ -1385,15 +1210,11 @@ jobs:
           SIZE_BYTES=$(stat -c%s release-assets/rootfs.img.7z)
           echo "  单个 7z 大小：$((SIZE_BYTES / 1024 / 1024)) MiB"
 
-          # ---------- 计算最少分卷数 ----------
           N=$(( (SIZE_BYTES + MAX_SPLIT_BYTES - 1) / MAX_SPLIT_BYTES ))
           if [ "$N" -le 1 ]; then
-            echo "  压缩后大小未超过最大分卷限制，无需分卷。"
-            # 保留已生成的单个 7z
+            echo "  未超过最大分卷限制，无需分卷。"
           else
-            # 自适应计算实际分卷大小，使分卷数最少且每卷尽量接近上限
             SPLIT_BYTES=$(( (SIZE_BYTES + N - 1) / N ))
-            # 留 1 MiB 余量，避免 7z 元数据导致分卷超出限制
             SPLIT_BYTES=$(( SPLIT_BYTES - 1048576 ))
             if [ "$SPLIT_BYTES" -lt 1048576 ]; then
               SPLIT_BYTES=1048576
@@ -1405,22 +1226,17 @@ jobs:
               release-assets/rootfs.img.7z rootfs.img > /dev/null
           fi
 
-          # ---------- 压缩 boot.img（不分卷） ----------
           echo "  boot.img 压缩中..."
           7z a -t7z -m0=lzma2 -mx="$LEVEL" -mfb=273 -md=256m -ms=on \
             release-assets/boot.img.7z boot.img > /dev/null
 
-          # ---------- 压缩 .deb 包（不分卷） ----------
           if compgen -G "*.deb" > /dev/null; then
             echo "  .deb 包压缩中..."
             7z a -t7z -m0=lzma2 -mx="$LEVEL" -mfb=273 -md=256m -ms=on \
               release-assets/debs.7z *.deb > /dev/null
           fi
 
-          # ---------- 生成 SHA256 校验和 ----------
-          echo "  生成 SHA256 校验和..."
           sha256sum release-assets/* > release-assets/SHA256SUMS.txt
-
           echo "  压缩产物："
           ls -lh release-assets/
           echo "✓ 7-Zip 深度压缩与自适应分卷完成"
@@ -1443,19 +1259,18 @@ jobs:
           - 主机名: ${{ inputs.hostname }}
           - 语言: ${{ inputs.language }}
           - 启动模式: ${{ inputs.boot_mode }}
-          - 静默启动: ${{ inputs.quiet_boot }}
           - 内核来源: ${{ inputs.kernel_source }}
-          - 固件仓库: ${{ inputs.firmware_repo }}@${{ inputs.firmware_branch }}
+          - 固件仓库: $FIRMWARE_REPO@$FIRMWARE_BRANCH
           - 运行编号: ${{ github.run_number }}
           - 提交: ${{ github.sha }}
 
-          压缩格式：7z / LZMA2，最大分卷上限：${{ inputs.release_split_size }}
-          实际分卷大小由压缩后大小自动计算，尽量取最少分卷数。
+          压缩格式：7z / LZMA2，最大分卷上限：$RELEASE_SPLIT_SIZE
+          实际分卷大小由压缩后大小自动计算。
           校验：SHA256SUMS.txt"
 
           EXTRA=()
-          if [[ "${{ inputs.release_draft }}" == "true" ]]; then EXTRA+=(--draft); fi
-          if [[ "${{ inputs.release_prerelease }}" == "true" ]]; then EXTRA+=(--prerelease); fi
+          if [[ "$RELEASE_DRAFT" == "true" ]]; then EXTRA+=(--draft); fi
+          if [[ "$RELEASE_PRERELEASE" == "true" ]]; then EXTRA+=(--prerelease); fi
 
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo "  Release $TAG 已存在，覆盖上传资产..."
