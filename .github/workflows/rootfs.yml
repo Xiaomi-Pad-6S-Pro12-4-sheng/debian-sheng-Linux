@@ -1,14 +1,14 @@
 # ============================================================================
-# 🐧 Build RootFS for Xiaomi Pad 6s Pro (Sheng)
+# 🐧 为小米平板 6s Pro（Sheng）构建 RootFS
 # ============================================================================
 
-name: Build RootFS
+name: 构建 RootFS
 
 on:
   workflow_dispatch:
     inputs:
       distro_suite:
-        description: 'Debian Version'
+        description: 'Debian 版本'
         type: choice
         options:
           - trixie
@@ -16,7 +16,7 @@ on:
         default: 'trixie'
 
       desktop:
-        description: 'Desktop Environment (server = no DE)'
+        description: '桌面环境（server = 无桌面）'
         type: choice
         options:
           - GNOME
@@ -25,27 +25,27 @@ on:
         default: 'KDE Plasma'
 
       plasma_mobile:
-        description: 'Enable Plasma Mobile instead of Plasma Desktop'
+        description: '启用 Plasma Mobile 而非 Plasma Desktop'
         type: boolean
         default: false
 
       autologin:
-        description: 'Autologin'
+        description: '自动登录'
         type: boolean
         default: true
 
       username:
-        description: 'Username'
+        description: '用户名'
         type: string
         default: 'username'
 
       hostname:
-        description: 'Hostname'
+        description: '主机名'
         type: string
         default: 'xiaomi-sheng'
 
       language:
-        description: 'System language'
+        description: '系统语言'
         type: choice
         options:
           - 'None (C.UTF-8)'
@@ -62,10 +62,10 @@ on:
 
       boot_mode:
         description: |
-          Boot mode:
-          - single: Boot from partition "userdata"
-          - dual: Boot from partition "linux"
-          - custom: Boot from custom partition (No prebuilt kernel available)
+          启动模式：
+          - single: 从 "userdata" 分区启动
+          - dual: 从 "linux" 分区启动
+          - custom: 从自定义分区启动（无预编译内核可用）
         type: choice
         options:
           - 'single (userdata)'
@@ -74,21 +74,21 @@ on:
         default: 'dual (linux)'
 
       quiet_boot:
-        description: 'Enable quiet boot with Plymouth splash'
+        description: '启用安静启动（带 Plymouth 启动画面）'
         type: boolean
         default: true
 
       custom_partition:
-        description: 'Custom partition (required when boot_mode=custom)'
+        description: '自定义分区（boot_mode=custom 时必填）'
         type: string
         required: false
         default: ''
 
       kernel_source:
         description: |
-          Kernel Source:
+          内核来源：
           - prebuilt: ianchb/sm8550-mainline
-          - custom_build: Custom repo
+          - custom_build: 自定义仓库
         type: choice
         options:
           - 'prebuilt'
@@ -96,57 +96,57 @@ on:
         default: 'prebuilt'
 
       kernel_repo:
-        description: 'Kernel Repo URL (required when kernel_source=custom_build)'
+        description: '内核仓库 URL（kernel_source=custom_build 时必填）'
         type: string
         required: false
         default: 'https://github.com/ianchb/sm8550-mainline'
 
       kernel_branch:
-        description: 'Kernel Branch (required when kernel_source=custom_build)'
+        description: '内核分支（kernel_source=custom_build 时必填）'
         type: string
         required: false
         default: 'sheng-7.2.6'
 
       kernel_config:
-        description: 'Kernel Config (required when kernel_source=custom_build)'
+        description: '内核配置（kernel_source=custom_build 时必填）'
         type: string
         required: false
         default: 'sm8550.config'
 
       firmware_repo:
-        description: 'Firmware Repo URL'
+        description: '固件仓库 URL'
         type: string
         required: false
         default: 'https://github.com/ianchb/sheng-firmware'
 
       firmware_branch:
-        description: 'Firmware Branch'
+        description: '固件分支'
         type: string
         required: false
         default: 'master'
 
 # ============================================================================
-# Build Jobs — each produces one .deb, uploaded as an artifact
+# 构建任务 — 每个任务产出一个 .deb，并作为 artifact 上传
 # ============================================================================
 
 jobs:
   # ==========================================================================
-  # Kernel (conditional on custom_build)
+  # 内核（仅 custom_build 时执行）
   # ==========================================================================
   build-kernel:
-    name: "Build Kernel"
+    name: "构建内核"
     runs-on: ubuntu-24.04-arm
 
     steps:
-      - name: "Skip (Prebuilt Kernel)"
+      - name: "跳过（使用预编译内核）"
         if: ${{ inputs.kernel_source != 'custom_build' }}
-        run: echo "✓ Using prebuilt kernel, build skipped"
+        run: echo "✓ 使用预编译内核，跳过构建"
 
-      - name: "Checkout Repo"
+      - name: "检出仓库"
         if: ${{ inputs.kernel_source == 'custom_build' }}
         uses: actions/checkout@v7
 
-      - name: "Install Build Tools"
+      - name: "安装构建工具"
         if: ${{ inputs.kernel_source == 'custom_build' }}
         run: |
           sudo apt-get update
@@ -157,9 +157,9 @@ jobs:
           ccache --set-config=max_size=10G
           ccache --set-config=cache_dir=/home/runner/.ccache
           ccache --set-config=sloppiness=file_macro,locale,time_macros
-          echo "✓ Build tools installed"
+          echo "✓ 构建工具已安装"
 
-      - name: "Restore ccache"
+      - name: "恢复 ccache 缓存"
         if: ${{ inputs.kernel_source == 'custom_build' }}
         uses: actions/cache@v6
         with:
@@ -170,16 +170,16 @@ jobs:
             ccache-kernel-${{ inputs.kernel_branch }}-
             ccache-kernel-
 
-      - name: "Clone Kernel Repo"
+      - name: "克隆内核仓库"
         if: ${{ inputs.kernel_source == 'custom_build' }}
         run: |
           git clone "${{ inputs.kernel_repo }}" \
             --branch "${{ inputs.kernel_branch }}" \
             --depth 1 \
             linux
-          echo "✓ Kernel repo cloned"
+          echo "✓ 内核仓库已克隆"
 
-      - name: "Build Kernel"
+      - name: "构建内核"
         id: build
         if: ${{ inputs.kernel_source == 'custom_build' }}
         run: |
@@ -201,7 +201,7 @@ jobs:
 
           KVER="$(make kernelrelease -s)"
           echo "kernel_version=$KVER" >> $GITHUB_OUTPUT
-          echo "  Kernel version: $KVER"
+          echo "  内核版本：$KVER"
 
           make -j$(nproc) ARCH=arm64 LLVM=1 \
             INSTALL_MOD_PATH="${{ github.workspace }}/linux-xiaomi-sheng" \
@@ -224,9 +224,9 @@ jobs:
 
           cd "${{ github.workspace }}"
           ccache --show-stats --verbose | grep -E "(hit rate|cache hit|cache miss|max size)" || true
-          echo "✓ Kernel build complete"
+          echo "✓ 内核构建完成"
 
-      - name: "Package Kernel"
+      - name: "打包内核"
         if: ${{ inputs.kernel_source == 'custom_build' }}
         run: |
           KVER="${{ steps.build.outputs.kernel_version }}"
@@ -240,9 +240,9 @@ jobs:
           Description: Kernel and Modules for Xiaomi Pad 6s Pro
           CTRL
           dpkg-deb --build --root-owner-group linux-xiaomi-sheng
-          echo "✓ linux-xiaomi-sheng.deb packaged"
+          echo "✓ linux-xiaomi-sheng.deb 已打包"
 
-      - name: "Upload Kernel Package"
+      - name: "上传内核包"
         if: ${{ inputs.kernel_source == 'custom_build' }}
         uses: actions/upload-artifact@v7
         with:
@@ -251,7 +251,7 @@ jobs:
           retention-days: 3
           if-no-files-found: error
 
-      - name: "Upload Kernel Image"
+      - name: "上传内核镜像"
         if: ${{ inputs.kernel_source == 'custom_build' }}
         uses: actions/upload-artifact@v7
         with:
@@ -261,31 +261,31 @@ jobs:
           if-no-files-found: error
 
   # ==========================================================================
-  # fastrpc — Qualcomm FastRPC userspace + adsprpcd-sensorspd.service
+  # fastrpc — 高通 FastRPC 用户空间库 + adsprpcd-sensorspd.service
   # ==========================================================================
   build-fastrpc:
-    name: "Build fastrpc"
+    name: "构建 fastrpc"
     runs-on: ubuntu-24.04-arm
 
     steps:
-      - name: "Checkout Repo"
+      - name: "检出仓库"
         uses: actions/checkout@v7
 
-      - name: "Install Build Tools"
+      - name: "安装构建工具"
         run: |
           sudo apt-get update
           sudo apt-get install -y \
             build-essential autoconf automake libtool pkg-config \
             git wget unzip dpkg-dev libyaml-dev linux-libc-dev
-          echo "✓ Build tools installed"
+          echo "✓ 构建工具已安装"
 
-      - name: "Download Source"
+      - name: "下载源码"
         run: |
           wget -q https://github.com/qualcomm/fastrpc/archive/refs/tags/v1.0.2.zip
           unzip -q v1.0.2.zip
-          echo "✓ Source downloaded"
+          echo "✓ 源码已下载"
 
-      - name: "Build fastrpc"
+      - name: "构建 fastrpc"
         run: |
           cd fastrpc-1.0.2
           autoreconf -is
@@ -293,15 +293,15 @@ jobs:
           make -j$(nproc)
           mkdir -p stage
           make DESTDIR=$PWD/stage install
-          echo "✓ fastrpc built"
+          echo "✓ fastrpc 已构建"
 
-      - name: "Add systemd Service"
+      - name: "添加 systemd 服务"
         run: |
           mkdir -p fastrpc-1.0.2/stage/usr/lib/systemd/system
           cp patches/adsprpcd-sensorspd.service fastrpc-1.0.2/stage/usr/lib/systemd/system/
-          echo "✓ systemd service added"
+          echo "✓ systemd 服务已添加"
 
-      - name: "Package fastrpc"
+      - name: "打包 fastrpc"
         run: |
           mkdir -p deb/DEBIAN
           cp -r fastrpc-1.0.2/stage/usr deb/
@@ -323,9 +323,9 @@ jobs:
           chmod 755 deb/usr/bin/adsprpcd
           dpkg-deb --build deb
           mv deb.deb fastrpc_1.0.2-1_arm64.deb
-          echo "✓ fastrpc packaged"
+          echo "✓ fastrpc 已打包"
 
-      - name: "Upload fastrpc"
+      - name: "上传 fastrpc"
         uses: actions/upload-artifact@v7
         with:
           name: fastrpc-deb
@@ -334,17 +334,17 @@ jobs:
           if-no-files-found: error
 
   # ==========================================================================
-  # libssc — Qualcomm Sensor Core userspace library
+  # libssc — 高通 Sensor Core 用户空间库
   # ==========================================================================
   build-libssc:
-    name: "Build libssc"
+    name: "构建 libssc"
     runs-on: ubuntu-24.04-arm
 
     steps:
-      - name: "Checkout Repo"
+      - name: "检出仓库"
         uses: actions/checkout@v7
 
-      - name: "Install Build Tools"
+      - name: "安装构建工具"
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -352,29 +352,29 @@ jobs:
             libglib2.0-dev libprotobuf-c-dev libqmi-glib-dev libmbim-glib-dev \
             linux-libc-dev protobuf-compiler protobuf-c-compiler
           pip3 install --upgrade meson
-          echo "✓ Build tools installed"
+          echo "✓ 构建工具已安装"
 
-      - name: "Clone Source"
+      - name: "克隆源码"
         run: |
           git clone https://codeberg.org/DylanVanAssche/libssc.git source
-          echo "✓ Source cloned"
+          echo "✓ 源码已克隆"
 
-      - name: "Apply Patch"
+      - name: "应用补丁"
         run: |
           cd source
           cp "${{ github.workspace }}/patches/wait_for_qmi_service.patch" .
           patch -Np1 < wait_for_qmi_service.patch || true
-          echo "✓ Patch applied"
+          echo "✓ 补丁已应用"
 
-      - name: "Build libssc"
+      - name: "构建 libssc"
         run: |
           cd source
           meson setup build --prefix=/usr
           meson compile -C build
           DESTDIR=$PWD/stage meson install -C build
-          echo "✓ libssc built"
+          echo "✓ libssc 已构建"
 
-      - name: "Package libssc"
+      - name: "打包 libssc"
         run: |
           mkdir -p deb/DEBIAN deb/usr
           cp -r source/stage/usr/* deb/usr/
@@ -396,9 +396,9 @@ jobs:
           chmod 755 deb/usr/bin/ssccli
           dpkg-deb --build deb
           mv deb.deb libssc_0.3.0-1_arm64.deb
-          echo "✓ libssc packaged"
+          echo "✓ libssc 已打包"
 
-      - name: "Upload libssc"
+      - name: "上传 libssc"
         uses: actions/upload-artifact@v7
         with:
           name: libssc-deb
@@ -407,15 +407,15 @@ jobs:
           if-no-files-found: error
 
   # ==========================================================================
-  # iio-sensor-proxy — patched with Qualcomm SSC support (needs libssc)
+  # iio-sensor-proxy — 带高通 SSC 支持的补丁版（依赖 libssc）
   # ==========================================================================
   build-iio-sensor-proxy:
-    name: "Build iio-sensor-proxy"
+    name: "构建 iio-sensor-proxy"
     runs-on: ubuntu-24.04-arm
     needs: [build-libssc]
 
     steps:
-      - name: "Install Build Tools"
+      - name: "安装构建工具"
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -425,26 +425,26 @@ jobs:
             systemd libqmi-glib-dev libmbim-glib-dev \
             linux-libc-dev protobuf-compiler protobuf-c-compiler
           pip3 install --upgrade meson
-          echo "✓ Build tools installed"
+          echo "✓ 构建工具已安装"
 
-      - name: "Download libssc"
+      - name: "下载 libssc"
         uses: actions/download-artifact@v8
         with:
           name: libssc-deb
 
-      - name: "Install libssc"
+      - name: "安装 libssc"
         run: |
           sudo dpkg -i libssc_*.deb
           sudo ldconfig
-          echo "✓ libssc installed"
+          echo "✓ libssc 已安装"
 
-      - name: "Download Source"
+      - name: "下载源码"
         run: |
           wget -q https://gitlab.freedesktop.org/hadess/iio-sensor-proxy/-/archive/3.9/iio-sensor-proxy-3.9.tar.gz
           tar -xf iio-sensor-proxy-3.9.tar.gz
-          echo "✓ Source downloaded"
+          echo "✓ 源码已下载"
 
-      - name: "Build iio-sensor-proxy"
+      - name: "构建 iio-sensor-proxy"
         run: |
           cd iio-sensor-proxy-3.9
           meson setup output \
@@ -454,9 +454,9 @@ jobs:
             -Dsystemdsystemunitdir=/usr/lib/systemd/system
           meson compile -C output
           DESTDIR=$PWD/stage meson install --no-rebuild -C output
-          echo "✓ iio-sensor-proxy built"
+          echo "✓ iio-sensor-proxy 已构建"
 
-      - name: "Package iio-sensor-proxy"
+      - name: "打包 iio-sensor-proxy"
         run: |
           mkdir -p deb/DEBIAN
           cp -r iio-sensor-proxy-3.9/stage/usr deb/
@@ -479,9 +479,9 @@ jobs:
           chmod 755 deb/usr/libexec/iio-sensor-proxy
           dpkg-deb --build deb
           mv deb.deb iio-sensor-proxy_99993.9-6_arm64.deb
-          echo "✓ iio-sensor-proxy packaged"
+          echo "✓ iio-sensor-proxy 已打包"
 
-      - name: "Upload iio-sensor-proxy"
+      - name: "上传 iio-sensor-proxy"
         uses: actions/upload-artifact@v7
         with:
           name: iio-sensor-proxy-deb
@@ -490,23 +490,23 @@ jobs:
           if-no-files-found: error
 
   # ==========================================================================
-  # sheng-sensors — proprietary sensor configuration files
+  # sheng-sensors — 专有传感器配置文件
   # ==========================================================================
   build-sheng-sensors:
-    name: "Build sheng-sensors"
+    name: "构建 sheng-sensors"
     runs-on: ubuntu-24.04-arm
 
     steps:
-      - name: "Checkout Repo"
+      - name: "检出仓库"
         uses: actions/checkout@v7
 
-      - name: "Install Build Tools"
+      - name: "安装构建工具"
         run: |
           sudo apt-get update
           sudo apt-get install -y dpkg-dev
-          echo "✓ Build tools installed"
+          echo "✓ 构建工具已安装"
 
-      - name: "Package sheng-sensors"
+      - name: "打包 sheng-sensors"
         run: |
           mkdir -p deb/DEBIAN
           cp -r sheng-sensors-files/usr deb/
@@ -546,9 +546,9 @@ jobs:
 
           dpkg-deb --build deb
           mv deb.deb sheng-sensors_20240917-1_arm64.deb
-          echo "✓ sheng-sensors packaged"
+          echo "✓ sheng-sensors 已打包"
 
-      - name: "Upload sheng-sensors"
+      - name: "上传 sheng-sensors"
         uses: actions/upload-artifact@v7
         with:
           name: sheng-sensors-deb
@@ -557,34 +557,34 @@ jobs:
           if-no-files-found: error
 
   # ==========================================================================
-  # sheng-devauth — keyboard authentication daemon
+  # sheng-devauth — 键盘认证守护进程
   # ==========================================================================
   build-sheng-devauth:
-    name: "Build sheng-devauth"
+    name: "构建 sheng-devauth"
     runs-on: ubuntu-24.04-arm
 
     steps:
-      - name: "Checkout Repo"
+      - name: "检出仓库"
         uses: actions/checkout@v7
 
-      - name: "Install Build Tools"
+      - name: "安装构建工具"
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential dpkg-dev git
-          echo "✓ Build tools installed"
+          echo "✓ 构建工具已安装"
 
-      - name: "Clone Source"
+      - name: "克隆源码"
         run: |
           git clone https://github.com/ianchb/sheng_devauth.git source
-          echo "✓ Source cloned"
+          echo "✓ 源码已克隆"
 
-      - name: "Build Binary"
+      - name: "构建二进制"
         run: |
           cd source
           make
-          echo "✓ Binary built"
+          echo "✓ 二进制已构建"
 
-      - name: "Package sheng-devauth"
+      - name: "打包 sheng-devauth"
         run: |
           mkdir -p sheng-devauth/usr/bin
           chmod 0755 source/xiaomi_devauth
@@ -614,9 +614,9 @@ jobs:
           chmod 0755 sheng-devauth/DEBIAN/prerm
 
           dpkg-deb --build --root-owner-group sheng-devauth
-          echo "✓ sheng-devauth packaged"
+          echo "✓ sheng-devauth 已打包"
 
-      - name: "Upload sheng-devauth"
+      - name: "上传 sheng-devauth"
         uses: actions/upload-artifact@v7
         with:
           name: sheng-devauth-deb
@@ -625,10 +625,10 @@ jobs:
           if-no-files-found: error
 
   # ==========================================================================
-  # RootFS Assembly — collects every .deb, builds the image
+  # RootFS 组装 — 收集所有 .deb，并构建镜像
   # ==========================================================================
   build-rootfs:
-    name: "Build RootFS"
+    name: "构建 RootFS"
     runs-on: ubuntu-24.04-arm
     needs:
       - build-kernel
@@ -647,32 +647,32 @@ jobs:
 
     steps:
       # ----------------------------------------------------------------
-      # Checkout & Validate
+      # 检出与校验
       # ----------------------------------------------------------------
 
-      - name: "Checkout Repo"
+      - name: "检出仓库"
         uses: actions/checkout@v7
 
-      - name: "Verify Arguments"
+      - name: "校验参数"
         env:
           ROOTFS_PASSWORD: ${{ secrets.ROOTFS_PASSWORD }}
         run: |
           if [[ -z "$ROOTFS_PASSWORD" ]]; then
-            echo "::warning::ROOTFS_PASSWORD is not set; the image will use the default password 'password'."
+            echo "::warning::未设置 ROOTFS_PASSWORD；镜像将使用默认密码 'password'。"
           fi
           if [[ "${{ inputs.boot_mode }}" == "custom" ]]; then
             if [[ "${{ inputs.kernel_source }}" != "custom_build" ]]; then
-              echo "Error: Custom partition requires custom_build kernel"
+              echo "错误：自定义分区需要 custom_build 内核"
               exit 1
             fi
             if [[ -z "${{ inputs.custom_partition }}" ]]; then
-              echo "Error: custom_partition is required when boot_mode=custom"
+              echo "错误：boot_mode=custom 时必须指定 custom_partition"
               exit 1
             fi
           fi
-          echo "✓ Arguments verified"
+          echo "✓ 参数校验通过"
 
-      - name: "Parse Partition Label"
+      - name: "解析分区标签"
         id: partition
         run: |
           if [[ "${{ inputs.quiet_boot }}" == "true" && "${{ inputs.desktop }}" != "server" ]]; then
@@ -703,27 +703,27 @@ jobs:
               echo "label=${{ inputs.custom_partition }}" >> $GITHUB_OUTPUT
               ;;
           esac
-          echo "✓ Partition label set"
+          echo "✓ 分区标签已设置"
 
       # ----------------------------------------------------------------
-      # Install Tools
+      # 安装工具
       # ----------------------------------------------------------------
 
-      - name: "Install Build Tools"
+      - name: "安装构建工具"
         run: |
           sudo apt-get update
           sudo apt-get install -y debootstrap git curl
-          echo "✓ Build tools installed"
+          echo "✓ 构建工具已安装"
 
       # ----------------------------------------------------------------
-      # Acquire Kernel
+      # 获取内核
       # ----------------------------------------------------------------
 
-      - name: "[Prebuilt] Download Kernel"
+      - name: "[预编译] 下载内核"
         if: ${{ inputs.kernel_source != 'custom_build' }}
         run: |
           LATEST_TAG=$(gh release list --repo ianchb/sm8550-mainline --limit 1 --json tagName -q '.[0].tagName')
-          echo "  Latest tag: $LATEST_TAG"
+          echo "  最新标签：$LATEST_TAG"
 
           BOOT_PATTERN="${{ steps.partition.outputs.boot_img_pattern }}"
           gh release download "$LATEST_TAG" \
@@ -736,61 +736,61 @@ jobs:
             --repo ianchb/sm8550-mainline \
             --pattern "linux-xiaomi-sheng*.deb" \
             --clobber
-          echo "✓ Prebuilt kernel downloaded"
+          echo "✓ 预编译内核已下载"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: "[Custom] Download Kernel Package"
+      - name: "[自定义] 下载内核包"
         if: ${{ inputs.kernel_source == 'custom_build' }}
         uses: actions/download-artifact@v8
         with:
           name: kernel-custom-deb
 
-      - name: "[Custom] Download Kernel Image"
+      - name: "[自定义] 下载内核镜像"
         if: ${{ inputs.kernel_source == 'custom_build' }}
         uses: actions/download-artifact@v8
         with:
           name: kernel-custom-image
 
       # ----------------------------------------------------------------
-      # Download Build-Job Artifacts
+      # 下载各构建任务的 artifact
       # ----------------------------------------------------------------
 
-      - name: "Download fastrpc"
+      - name: "下载 fastrpc"
         uses: actions/download-artifact@v8
         with:
           name: fastrpc-deb
 
-      - name: "Download libssc"
+      - name: "下载 libssc"
         uses: actions/download-artifact@v8
         with:
           name: libssc-deb
 
-      - name: "Download iio-sensor-proxy"
+      - name: "下载 iio-sensor-proxy"
         uses: actions/download-artifact@v8
         with:
           name: iio-sensor-proxy-deb
 
-      - name: "Download sheng-sensors"
+      - name: "下载 sheng-sensors"
         uses: actions/download-artifact@v8
         with:
           name: sheng-sensors-deb
 
-      - name: "Download sheng-devauth"
+      - name: "下载 sheng-devauth"
         uses: actions/download-artifact@v8
         with:
           name: sheng-devauth-deb
 
       # ----------------------------------------------------------------
-      # Prepare Inline Packages
+      # 准备内联包
       # ----------------------------------------------------------------
 
-      - name: "Package alsa-xiaomi-sheng"
+      - name: "打包 alsa-xiaomi-sheng"
         run: |
           dpkg-deb --build --root-owner-group alsa-xiaomi-sheng
-          echo "✓ alsa-xiaomi-sheng.deb packaged"
+          echo "✓ alsa-xiaomi-sheng.deb 已打包"
 
-      - name: "Upload alsa-xiaomi-sheng"
+      - name: "上传 alsa-xiaomi-sheng"
         uses: actions/upload-artifact@v7
         with:
           name: alsa-xiaomi-sheng-deb
@@ -798,7 +798,7 @@ jobs:
           retention-days: 3
           if-no-files-found: error
 
-      - name: "Package firmware-xiaomi-sheng"
+      - name: "打包 firmware-xiaomi-sheng"
         run: |
           git clone --depth 1 \
             --branch "${{ inputs.firmware_branch }}" \
@@ -808,9 +808,9 @@ jobs:
           cp -r firmware-src/* firmware-xiaomi-sheng/usr/lib/firmware/
           rm -rf firmware-src
           dpkg-deb --build --root-owner-group firmware-xiaomi-sheng
-          echo "✓ firmware-xiaomi-sheng.deb packaged"
+          echo "✓ firmware-xiaomi-sheng.deb 已打包"
 
-      - name: "Upload firmware-xiaomi-sheng"
+      - name: "上传 firmware-xiaomi-sheng"
         uses: actions/upload-artifact@v7
         with:
           name: firmware-xiaomi-sheng-deb
@@ -818,18 +818,18 @@ jobs:
           retention-days: 3
           if-no-files-found: error
 
-      - name: "Download xiaomi-mipps-auth"
+      - name: "下载 xiaomi-mipps-auth"
         run: |
           LATEST_TAG=$(gh release list --repo ianchb/xiaomi-mipps-auth --limit 1 --json tagName -q '.[0].tagName')
           gh release download "$LATEST_TAG" \
             --repo ianchb/xiaomi-mipps-auth \
             --pattern "*.deb" \
             --clobber
-          echo "✓ xiaomi-mipps-auth.deb downloaded"
+          echo "✓ xiaomi-mipps-auth.deb 已下载"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: "Upload xiaomi-mipps-auth"
+      - name: "上传 xiaomi-mipps-auth"
         uses: actions/upload-artifact@v7
         with:
           name: xiaomi-mipps-auth-deb
@@ -837,18 +837,18 @@ jobs:
           retention-days: 3
           if-no-files-found: error
 
-      - name: "Download xiaomi-charger-mode"
+      - name: "下载 xiaomi-charger-mode"
         run: |
           LATEST_TAG=$(gh release list --repo ianchb/xiaomi-charger-mode --limit 1 --json tagName -q '.[0].tagName')
           gh release download "$LATEST_TAG" \
             --repo ianchb/xiaomi-charger-mode \
             --pattern "*.deb" \
             --clobber
-          echo "✓ xiaomi-charger-mode.deb downloaded"
+          echo "✓ xiaomi-charger-mode.deb 已下载"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: "Upload xiaomi-charger-mode"
+      - name: "上传 xiaomi-charger-mode"
         uses: actions/upload-artifact@v7
         with:
           name: xiaomi-charger-mode-deb
@@ -856,18 +856,18 @@ jobs:
           retention-days: 3
           if-no-files-found: error
 
-      - name: "Download xiaomi-sheng-thp"
+      - name: "下载 xiaomi-sheng-thp"
         run: |
           LATEST_TAG=$(gh release list --repo ianchb/xiaomi-sheng-thp --limit 1 --json tagName -q '.[0].tagName')
           gh release download "$LATEST_TAG" \
             --repo ianchb/xiaomi-sheng-thp \
             --pattern "*.deb" \
             --clobber
-          echo "✓ xiaomi-sheng-thp.deb downloaded"
+          echo "✓ xiaomi-sheng-thp.deb 已下载"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: "Upload xiaomi-sheng-thp"
+      - name: "上传 xiaomi-sheng-thp"
         uses: actions/upload-artifact@v7
         with:
           name: xiaomi-sheng-thp-deb
@@ -875,18 +875,18 @@ jobs:
           retention-days: 3
           if-no-files-found: error
 
-      - name: "Download xiaomi-pen-status"
+      - name: "下载 xiaomi-pen-status"
         run: |
           LATEST_TAG=$(gh release list --repo ianchb/xiaomi-pen-status --limit 1 --json tagName -q '.[0].tagName')
           gh release download "$LATEST_TAG" \
             --repo ianchb/xiaomi-pen-status \
             --pattern "*.deb" \
             --clobber
-          echo "✓ xiaomi-pen-status.deb downloaded"
+          echo "✓ xiaomi-pen-status.deb 已下载"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: "Upload xiaomi-pen-status"
+      - name: "上传 xiaomi-pen-status"
         uses: actions/upload-artifact@v7
         with:
           name: xiaomi-pen-status-deb
@@ -894,18 +894,18 @@ jobs:
           retention-days: 3
           if-no-files-found: error
 
-      - name: "Download xiaomi-sheng-fingerprint"
+      - name: "下载 xiaomi-sheng-fingerprint"
         run: |
           LATEST_TAG=$(gh release list --repo ianchb/xiaomi-sheng-fingerprint --limit 1 --json tagName -q '.[0].tagName')
           gh release download "$LATEST_TAG" \
             --repo ianchb/xiaomi-sheng-fingerprint \
             --pattern "*.deb" \
             --clobber
-          echo "✓ xiaomi-sheng-fingerprint.deb downloaded"
+          echo "✓ xiaomi-sheng-fingerprint.deb 已下载"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: "Upload xiaomi-sheng-fingerprint"
+      - name: "上传 xiaomi-sheng-fingerprint"
         uses: actions/upload-artifact@v7
         with:
           name: xiaomi-sheng-fingerprint-deb
@@ -913,18 +913,18 @@ jobs:
           retention-days: 3
           if-no-files-found: error
 
-      - name: "Download xiaomi-sheng-keyboard-helper"
+      - name: "下载 xiaomi-sheng-keyboard-helper"
         run: |
           LATEST_TAG=$(gh release list --repo ianchb/xiaomi-sheng-keyboard-helper --limit 1 --json tagName -q '.[0].tagName')
           gh release download "$LATEST_TAG" \
             --repo ianchb/xiaomi-sheng-keyboard-helper \
             --pattern "*.deb" \
             --clobber
-          echo "✓ xiaomi-sheng-keyboard-helper.deb downloaded"
+          echo "✓ xiaomi-sheng-keyboard-helper.deb 已下载"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: "Upload xiaomi-sheng-keyboard-helper"
+      - name: "上传 xiaomi-sheng-keyboard-helper"
         uses: actions/upload-artifact@v7
         with:
           name: xiaomi-sheng-keyboard-helper.deb
@@ -933,26 +933,26 @@ jobs:
           if-no-files-found: error
 
       # ----------------------------------------------------------------
-      # Create Image
+      # 创建镜像
       # ----------------------------------------------------------------
 
-      - name: "Create RootFS Image"
+      - name: "创建 RootFS 镜像"
         run: |
           truncate -s "$IMAGE_SIZE" rootfs.img
           mkfs.ext4 rootfs.img
-          echo "✓ RootFS image created (${IMAGE_SIZE})"
+          echo "✓ RootFS 镜像已创建（${IMAGE_SIZE}）"
 
-      - name: "Mount RootFS Image"
+      - name: "挂载 RootFS 镜像"
         run: |
           sudo mkdir -p "$ROOTFS_MOUNT"
           sudo mount -o loop rootfs.img "$ROOTFS_MOUNT"
-          echo "✓ RootFS image mounted at $ROOTFS_MOUNT"
+          echo "✓ RootFS 镜像已挂载至 $ROOTFS_MOUNT"
 
       # ----------------------------------------------------------------
       # Debootstrap
       # ----------------------------------------------------------------
 
-      - name: "Run Debootstrap (${{ inputs.distro_suite }})"
+      - name: "运行 Debootstrap（${{ inputs.distro_suite }}）"
         run: |
           sudo debootstrap \
             --arch=arm64 \
@@ -960,22 +960,22 @@ jobs:
             "${{ inputs.distro_suite }}" \
             "$ROOTFS_MOUNT" \
             http://deb.debian.org/debian/
-          echo "✓ Debootstrap complete"
+          echo "✓ Debootstrap 完成"
 
-      - name: "Mount Virtual File Systems"
+      - name: "挂载虚拟文件系统"
         run: |
           sudo mount --bind /dev "$ROOTFS_MOUNT/dev"
           sudo mount --bind /dev/pts "$ROOTFS_MOUNT/dev/pts"
           sudo mount -t proc proc "$ROOTFS_MOUNT/proc"
           sudo mount -t sysfs sys "$ROOTFS_MOUNT/sys"
           sudo cp /etc/resolv.conf "$ROOTFS_MOUNT/etc/resolv.conf"
-          echo "✓ Virtual file systems mounted"
+          echo "✓ 虚拟文件系统已挂载"
 
       # ----------------------------------------------------------------
-      # Install Packages
+      # 安装软件包
       # ----------------------------------------------------------------
 
-      - name: "Install Base Packages"
+      - name: "安装基础软件包"
         run: |
           sudo chroot "$ROOTFS_MOUNT" apt-get update
           sudo chroot "$ROOTFS_MOUNT" apt-get install -y \
@@ -996,26 +996,26 @@ jobs:
             libyaml-0-2 \
             libgudev-1.0-0 \
             libpolkit-gobject-1-0
-          echo "✓ Base packages installed"
+          echo "✓ 基础软件包已安装"
 
-      - name: "Use Upstream Regulatory Database"
+      - name: "使用上游无线管制数据库"
         run: |
           sudo chroot "$ROOTFS_MOUNT" update-alternatives --set regulatory.db /lib/firmware/regulatory.db-upstream
-          echo "✓ Upstream regulatory database selected"
+          echo "✓ 已选择上游无线管制数据库"
 
-      - name: "Install Plymouth"
+      - name: "安装 Plymouth"
         if: ${{ steps.partition.outputs.quiet_boot_enabled == 'true' }}
         run: |
           sudo chroot "$ROOTFS_MOUNT" apt-get update
           sudo chroot "$ROOTFS_MOUNT" apt-get install -y \
             plymouth plymouth-themes
-          echo "✓ Plymouth installed"
+          echo "✓ Plymouth 已安装"
 
-      - name: "Install All .deb Packages"
+      - name: "安装所有 .deb 包"
         run: |
           sudo cp ./*.deb "$ROOTFS_MOUNT/tmp/"
 
-          echo "  Packages to install:"
+          echo "  待安装的软件包："
           sudo ls -lah "$ROOTFS_MOUNT/tmp/"*.deb
 
           sudo chroot "$ROOTFS_MOUNT" bash -c "
@@ -1023,82 +1023,82 @@ jobs:
             apt-get install -y /tmp/*.deb 2>&1 || apt-get install -f -y
             rm /tmp/*.deb
           "
-          echo "✓ All .deb packages installed"
+          echo "✓ 所有 .deb 包已安装"
 
       # ----------------------------------------------------------------
-      # System Tuning
+      # 系统调优
       # ----------------------------------------------------------------
 
-      - name: "Fix Permissions"
+      - name: "修复权限"
         run: |
           if [ -f "$ROOTFS_MOUNT/usr/bin/adsprpcd" ]; then
             sudo chmod +x "$ROOTFS_MOUNT/usr/bin/adsprpcd"
-            echo "✓ adsprpcd permissions fixed"
+            echo "✓ adsprpcd 权限已修复"
           else
-            echo "  /usr/bin/adsprpcd not found, skipped"
+            echo "  未找到 /usr/bin/adsprpcd，已跳过"
           fi
 
           if [ -f "$ROOTFS_MOUNT/usr/libexec/iio-sensor-proxy" ]; then
             sudo chmod +x "$ROOTFS_MOUNT/usr/libexec/iio-sensor-proxy"
-            echo "✓ iio-sensor-proxy permissions fixed"
+            echo "✓ iio-sensor-proxy 权限已修复"
           else
-            echo "  /usr/libexec/iio-sensor-proxy not found, skipped"
+            echo "  未找到 /usr/libexec/iio-sensor-proxy，已跳过"
           fi
 
           if [ -f "$ROOTFS_MOUNT/usr/bin/monitor-sensor" ]; then
             sudo chmod +x "$ROOTFS_MOUNT/usr/bin/monitor-sensor"
-            echo "✓ monitor-sensor permissions fixed"
+            echo "✓ monitor-sensor 权限已修复"
           else
-            echo "  /usr/bin/monitor-sensor not found, skipped"
+            echo "  未找到 /usr/bin/monitor-sensor，已跳过"
           fi
 
           if [ -f "$ROOTFS_MOUNT/usr/bin/ssccli" ]; then
             sudo chmod +x "$ROOTFS_MOUNT/usr/bin/ssccli"
-            echo "✓ ssccli permissions fixed"
+            echo "✓ ssccli 权限已修复"
           else
-            echo "  /usr/bin/ssccli not found, skipped"
+            echo "  未找到 /usr/bin/ssccli，已跳过"
           fi
 
-      - name: "Enable Sensor Services"
+      - name: "启用传感器服务"
         run: |
           sudo chroot "$ROOTFS_MOUNT" systemctl enable adsprpcd-sensorspd.service
-          echo "✓ Sensor services enabled"
+          echo "✓ 传感器服务已启用"
 
-      - name: "Set Hostname"
+      - name: "设置主机名"
         run: |
           echo "${{ inputs.hostname }}" | sudo tee "$ROOTFS_MOUNT/etc/hostname"
           if ! grep -q "127.0.1.1.*${{ inputs.hostname }}" "$ROOTFS_MOUNT/etc/hosts"; then
             echo "127.0.1.1 ${{ inputs.hostname }}" | sudo tee -a "$ROOTFS_MOUNT/etc/hosts"
           fi
-          echo "✓ Hostname set to ${{ inputs.hostname }}"
+          echo "✓ 主机名已设置为 ${{ inputs.hostname }}"
 
-      - name: "Configure Locale"
+      - name: "配置语言环境"
         run: |
           LANG_CHOICE="${{ inputs.language }}"
 
           if [ "$LANG_CHOICE" = 'None (C.UTF-8)' ]; then
-            echo "✓ System locale stays C.UTF-8"
+            echo "✓ 系统语言保持 C.UTF-8"
           else
-            # locales package provides locale-gen and /etc/locale.gen
+            # locales 包提供 locale-gen 和 /etc/locale.gen
             sudo chroot "$ROOTFS_MOUNT" apt-get update
             sudo chroot "$ROOTFS_MOUNT" apt-get install -y locales
-            # Generate selected language + en_US.UTF-8
+            # 生成所选语言 + en_US.UTF-8
             sudo sed -i 's/^# *\(en_US\.UTF-8\)/\1/' "$ROOTFS_MOUNT/etc/locale.gen"
             sudo sed -i "s/^# *\\(${LANG_CHOICE//./\\.}\\)/\\1/" "$ROOTFS_MOUNT/etc/locale.gen"
             sudo chroot "$ROOTFS_MOUNT" locale-gen
             echo "LANG=$LANG_CHOICE" | sudo tee "$ROOTFS_MOUNT/etc/default/locale"
-            echo "✓ Locale set to $LANG_CHOICE (+ en_US.UTF-8)"
+            echo "✓ 语言已设置为 $LANG_CHOICE（+ en_US.UTF-8）"
           fi
 
-      - name: "Create User"
+      - name: "创建用户"
         run: |
           sudo chroot "$ROOTFS_MOUNT" useradd \
             -m -s /bin/bash \
             -G sudo \
             "${{ inputs.username }}"
-          echo "✓ User ${{ inputs.username }} created"
+          echo "✓ 用户 ${{ inputs.username }} 已创建"
 
-      - name: "Set Passwords"
+      - name: "设置密码"
         env:
           ROOTFS_PASSWORD: ${{ secrets.ROOTFS_PASSWORD }}
         run: |
@@ -1111,13 +1111,13 @@ jobs:
             sudo chroot "$ROOTFS_MOUNT" chpasswd
           printf 'root:%s\n' "$ROOTFS_PASSWORD" | \
             sudo chroot "$ROOTFS_MOUNT" chpasswd
-          echo "✓ Passwords set"
+          echo "✓ 密码已设置"
 
       # ----------------------------------------------------------------
-      # Desktop Environment
+      # 桌面环境
       # ----------------------------------------------------------------
 
-      - name: "Install GNOME"
+      - name: "安装 GNOME"
         if: ${{ inputs.desktop == 'GNOME' }}
         run: |
           sudo chroot "$ROOTFS_MOUNT" apt-get update
@@ -1125,9 +1125,9 @@ jobs:
             gnome-shell gnome-session gnome-terminal \
             gdm3 firefox-esr \
             gnome-control-center
-          echo "✓ GNOME installed"
+          echo "✓ GNOME 已安装"
 
-      - name: "Install KDE Plasma"
+      - name: "安装 KDE Plasma"
         if: ${{ inputs.desktop == 'KDE Plasma' }}
         run: |
           sudo chroot "$ROOTFS_MOUNT" apt-get update
@@ -1141,31 +1141,31 @@ jobs:
             sddm konsole firefox-esr \
             dolphin kate \
             pipewire-alsa
-          echo "✓ KDE Plasma installed"
+          echo "✓ KDE Plasma 已安装"
 
-      - name: "Install KDE Plasma Plymouth Settings"
+      - name: "安装 KDE Plasma Plymouth 设置"
         if: ${{ inputs.desktop == 'KDE Plasma' && steps.partition.outputs.quiet_boot_enabled == 'true' }}
         run: |
           sudo chroot "$ROOTFS_MOUNT" apt-get update
           sudo chroot "$ROOTFS_MOUNT" apt-get install -y \
             kde-config-plymouth plymouth-theme-breeze
-          echo "✓ KDE Plasma Plymouth settings installed"
+          echo "✓ KDE Plasma Plymouth 设置已安装"
 
-      - name: "Configure GDM"
+      - name: "配置 GDM"
         if: ${{ inputs.desktop == 'GNOME' && (!inputs.autologin) }}
         run: |
           sudo chroot "$ROOTFS_MOUNT" systemctl enable gdm3
           sudo chroot "$ROOTFS_MOUNT" systemctl set-default graphical.target
-          echo "✓ GDM enabled (manual login)"
+          echo "✓ GDM 已启用（手动登录）"
 
-      - name: "Configure SDDM"
+      - name: "配置 SDDM"
         if: ${{ inputs.desktop == 'KDE Plasma' && (!inputs.autologin) }}
         run: |
           sudo chroot "$ROOTFS_MOUNT" systemctl enable sddm
           sudo chroot "$ROOTFS_MOUNT" systemctl set-default graphical.target
-          echo "✓ SDDM enabled (manual login)"
+          echo "✓ SDDM 已启用（手动登录）"
 
-      - name: "Configure GDM with Autologin"
+      - name: "配置 GDM 自动登录"
         if: ${{ inputs.desktop == 'GNOME' && inputs.autologin }}
         run: |
           sudo mkdir -p "$ROOTFS_MOUNT/etc/gdm3"
@@ -1176,9 +1176,9 @@ jobs:
           EOF
           sudo chroot "$ROOTFS_MOUNT" systemctl enable gdm3
           sudo chroot "$ROOTFS_MOUNT" systemctl set-default graphical.target
-          echo "✓ GDM autologin configured for ${{ inputs.username }}"
+          echo "✓ 已为 ${{ inputs.username }} 配置 GDM 自动登录"
 
-      - name: "Configure SDDM with Autologin"
+      - name: "配置 SDDM 自动登录"
         if: ${{ inputs.desktop == 'KDE Plasma' && inputs.autologin }}
         run: |
           if [[ "${{ inputs.plasma_mobile }}" == "true" ]]; then
@@ -1194,27 +1194,27 @@ jobs:
           EOF
           sudo chroot "$ROOTFS_MOUNT" systemctl enable sddm
           sudo chroot "$ROOTFS_MOUNT" systemctl set-default graphical.target
-          echo "✓ SDDM autologin configured for ${{ inputs.username }}"
+          echo "✓ 已为 ${{ inputs.username }} 配置 SDDM 自动登录"
 
-      - name: "Enable NetworkManager"
+      - name: "启用 NetworkManager"
         run: |
           sudo chroot "$ROOTFS_MOUNT" systemctl enable NetworkManager
-          echo "✓ NetworkManager enabled"
+          echo "✓ NetworkManager 已启用"
 
       # ----------------------------------------------------------------
-      # Finalize & Unmount
+      # 收尾与卸载
       # ----------------------------------------------------------------
 
-      - name: "Configure fstab"
+      - name: "配置 fstab"
         run: |
           PARTITION="${{ steps.partition.outputs.label }}"
           echo "PARTLABEL=$PARTITION / ext4 defaults,x-systemd.growfs 0 1" | \
             sudo tee "$ROOTFS_MOUNT/etc/fstab"
           echo "PARTLABEL=persist /mnt/sheng-persist ext4 ro,noload,nosuid,nodev,noexec,nofail,x-systemd.device-timeout=10s 0 0" | \
             sudo tee -a "$ROOTFS_MOUNT/etc/fstab"
-          echo "✓ fstab configured: root=PARTLABEL=$PARTITION"
+          echo "✓ fstab 已配置：root=PARTLABEL=$PARTITION"
 
-      - name: "Configure WLAN MAC"
+      - name: "配置 WLAN MAC"
         run: |
           sudo mkdir -p "$ROOTFS_MOUNT/mnt/sheng-persist" \
             "$ROOTFS_MOUNT/usr/lib/firmware/ath12k/WCN7850/hw2.0"
@@ -1225,34 +1225,34 @@ jobs:
           sudo install -D -m 0644 patches/sheng-wlan.service \
             "$ROOTFS_MOUNT/usr/lib/systemd/system/sheng-wlan.service"
           sudo chroot "$ROOTFS_MOUNT" systemctl enable sheng-wlan.service
-          echo "✓ WLAN MAC configured"
+          echo "✓ WLAN MAC 已配置"
 
-      - name: "Clean APT Cache"
+      - name: "清理 APT 缓存"
         run: |
           sudo chroot "$ROOTFS_MOUNT" apt-get clean
           sudo rm -f "$ROOTFS_MOUNT/etc/resolv.conf"
-          echo "✓ APT cache cleaned"
+          echo "✓ APT 缓存已清理"
 
-      - name: "Unmount Virtual File Systems"
+      - name: "卸载虚拟文件系统"
         if: always()
         run: |
           sudo umount "$ROOTFS_MOUNT/dev/pts" 2>/dev/null || true
           sudo umount "$ROOTFS_MOUNT/dev" 2>/dev/null || true
           sudo umount "$ROOTFS_MOUNT/proc" 2>/dev/null || true
           sudo umount "$ROOTFS_MOUNT/sys" 2>/dev/null || true
-          echo "✓ Virtual file systems unmounted"
+          echo "✓ 虚拟文件系统已卸载"
 
-      - name: "Unmount Image & Set UUID"
+      - name: "卸载镜像并设置 UUID"
         run: |
           sudo umount "$ROOTFS_MOUNT" 2>/dev/null || true
           tune2fs -U ee8d3593-59b1-480e-a3b6-4fefb17ee7d8 rootfs.img || true
-          echo "✓ Image unmounted, UUID set"
+          echo "✓ 镜像已卸载，UUID 已设置"
 
       # ----------------------------------------------------------------
-      # Boot Image (custom kernel only)
+      # 启动镜像（仅自定义内核）
       # ----------------------------------------------------------------
 
-      - name: "[Custom] Generate boot.img"
+      - name: "[自定义] 生成 boot.img"
         if: ${{ inputs.kernel_source == 'custom_build' }}
         run: |
           PARTITION="${{ steps.partition.outputs.label }}"
@@ -1270,13 +1270,13 @@ jobs:
             --pagesize 4096 \
             --id \
             -o boot.img
-          echo "✓ boot.img generated (cmdline: $CMDLINE)"
+          echo "✓ boot.img 已生成（cmdline：$CMDLINE）"
 
       # ----------------------------------------------------------------
-      # Upload Final Artifacts
+      # 上传最终产物
       # ----------------------------------------------------------------
 
-      - name: "Upload RootFS Image"
+      - name: "上传 RootFS 镜像"
         uses: actions/upload-artifact@v7
         with:
           name: rootfs-${{ inputs.distro_suite }}-${{ inputs.desktop }}-${{ steps.partition.outputs.label }}
@@ -1285,7 +1285,7 @@ jobs:
           if-no-files-found: error
           compression-level: 1
 
-      - name: "Upload Boot Image"
+      - name: "上传启动镜像"
         uses: actions/upload-artifact@v7
         with:
           name: boot-${{ inputs.distro_suite }}-${{ inputs.desktop }}-${{ steps.partition.outputs.label }}
